@@ -36,6 +36,14 @@ export default function EnrollmentNavigation() {
                 >
                   Join Course
                 </Link>
+              )}{" "}
+              {session.user.role === "student" && (
+                <Link
+                  href="/profile/face-registration"
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  Manage Face Registration
+                </Link>
               )}
               {session.user.role === "lecturer" && (
                 <Link
