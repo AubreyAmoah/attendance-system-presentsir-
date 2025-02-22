@@ -30,20 +30,20 @@ export default function EnrollmentNavigation() {
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {session.user.role === "student" && (
+                <>
                 <Link
                   href="/courses/join"
                   className="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300"
                 >
                   Join Course
                 </Link>
-              )}{" "}
-              {session.user.role === "student" && (
+
                 <Link
                   href="/profile/face-registration"
                   className="text-blue-600 hover:text-blue-800"
                 >
                   Manage Face Registration
-                </Link>
+                </Link></>
               )}
               {session.user.role === "lecturer" && (
                 <Link
