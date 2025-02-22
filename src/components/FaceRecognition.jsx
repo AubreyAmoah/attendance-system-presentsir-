@@ -11,52 +11,14 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
   const [model, setModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [permissionState, setPermissionState] = useState("prompt"); // 'prompt', 'granted', 'denied'
-
-  const requestCameraPermission = async () => {
-    try {
-      // First check if permissions API is supported
-      if (!navigator.permissions || !navigator.permissions.query) {
-        // Fallback to direct getUserMedia request
-        await startCamera();
-        setPermissionState("granted");
-        return true;
-      }
-
-      // Check camera permission status
-      const permission = await navigator.permissions.query({ name: "camera" });
-      setPermissionState(permission.state);
-
-      // Listen for permission changes
-      permission.addEventListener("change", () => {
-        setPermissionState(permission.state);
-      });
-
-      if (permission.state === "granted") {
-        await startCamera();
-        return true;
-      } else if (permission.state === "prompt") {
-        // Try to get camera access which will trigger the permission prompt
-        await startCamera();
-        setPermissionState("granted");
-        return true;
-      } else {
-        setError(
-          "Camera permission was denied. Please allow camera access to use this feature."
-        );
-        return false;
-      }
-    } catch (err) {
-      console.error("Permission request error:", err);
-      setError(
-        "Failed to access camera. Please ensure camera permissions are granted."
-      );
-      return false;
-    }
-  };
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   const startCamera = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera access is not supported in your browser");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
@@ -68,22 +30,23 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
+
+        // Wait for the video to be ready
+        await new Promise((resolve) => {
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().then(() => {
+              // Add a small delay to ensure video is actually playing
+              setTimeout(() => {
+                setIsVideoReady(true);
+                resolve();
+              }, 100);
+            });
+          };
+        });
       }
     } catch (err) {
       console.error("Camera access error:", err);
-      if (
-        err.name === "NotAllowedError" ||
-        err.name === "PermissionDeniedError"
-      ) {
-        setError(
-          "Camera access was denied. Please allow camera access in your browser settings."
-        );
-      } else {
-        setError(
-          "Failed to access camera. Please ensure your camera is connected and not in use by another application."
-        );
-      }
-      throw err;
+      setError(err.message || "Failed to access camera");
     }
   };
 
@@ -92,23 +55,13 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
       setLoading(true);
       setError(null);
 
-      // Check if mediaDevices is supported
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera access is not supported in your browser");
-      }
-
-      // Initialize TensorFlow
+      // Initialize TensorFlow and load model
       await tf.ready();
-
-      // Load the face detection model
       const loadedModel = await blazeface.load();
       setModel(loadedModel);
 
-      // Request camera permission and start camera
-      const hasPermission = await requestCameraPermission();
-      if (!hasPermission) {
-        throw new Error("Camera permission is required for face detection");
-      }
+      // Start camera after model is loaded
+      await startCamera();
 
       setLoading(false);
     } catch (err) {
@@ -120,7 +73,6 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
 
   useEffect(() => {
     initFaceDetection();
-
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -129,23 +81,35 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
   }, []);
 
   const captureFrame = async () => {
-    if (
-      !model ||
-      !videoRef.current ||
-      !videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
-    ) {
+    if (!model || !videoRef.current || !isVideoReady) {
+      console.log("Not ready:", {
+        hasModel: !!model,
+        hasVideo: !!videoRef.current,
+        isVideoReady,
+        videoWidth: videoRef.current?.videoWidth,
+        videoHeight: videoRef.current?.videoHeight,
+      });
       return;
     }
 
     try {
       setError(null);
 
+      // Ensure video dimensions are valid
+      if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+        throw new Error("Video dimensions not ready");
+      }
+
+      // Create canvas with video dimensions
       const canvas = document.createElement("canvas");
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext("2d");
+
+      // Draw the current frame
       ctx.drawImage(videoRef.current, 0, 0);
 
+      // Detect faces
       const predictions = await model.estimateFaces(videoRef.current, false);
 
       if (predictions.length === 0) {
@@ -163,27 +127,37 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
       const face = predictions[0];
       const { topLeft, bottomRight } = face;
 
+      // Add padding around the face
       const padding = 50;
       const width = bottomRight[0] - topLeft[0] + padding * 2;
       const height = bottomRight[1] - topLeft[1] + padding * 2;
 
+      // Create a new canvas for the face crop
       const faceCanvas = document.createElement("canvas");
       faceCanvas.width = width;
       faceCanvas.height = height;
       const faceCtx = faceCanvas.getContext("2d");
 
+      // Ensure coordinates are within bounds
+      const sourceX = Math.max(0, topLeft[0] - padding);
+      const sourceY = Math.max(0, topLeft[1] - padding);
+      const sourceWidth = Math.min(width, canvas.width - sourceX);
+      const sourceHeight = Math.min(height, canvas.height - sourceY);
+
+      // Draw the face region
       faceCtx.drawImage(
         canvas,
-        Math.max(0, topLeft[0] - padding),
-        Math.max(0, topLeft[1] - padding),
-        width,
-        height,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
         0,
         0,
         width,
         height
       );
 
+      // Convert to base64
       const faceImage = faceCanvas.toDataURL("image/jpeg", 0.9);
       onFaceDetected(faceImage);
     } catch (err) {
@@ -195,7 +169,7 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
   useEffect(() => {
     let interval;
 
-    if (mode === "verify" && model && videoRef.current) {
+    if (mode === "verify" && model && isVideoReady) {
       interval = setInterval(captureFrame, 1000);
     }
 
@@ -204,40 +178,7 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
         clearInterval(interval);
       }
     };
-  }, [mode, model]);
-
-  if (permissionState === "denied") {
-    return (
-      <div className="p-6 bg-red-50 rounded-lg text-center">
-        <h3 className="text-lg font-semibold text-red-700 mb-2">
-          Camera Access Required
-        </h3>
-        <p className="text-red-600 mb-4">
-          Camera access was denied. To use face recognition, please allow camera
-          access in your browser settings.
-        </p>
-        <button
-          onClick={() => initFaceDetection()}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-2">
-          {permissionState === "prompt"
-            ? "Waiting for camera permission..."
-            : "Initializing face detection..."}
-        </span>
-      </div>
-    );
-  }
+  }, [mode, model, isVideoReady]);
 
   if (error) {
     return (
@@ -256,6 +197,15 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <span className="ml-2">Initializing camera and face detection...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <video
@@ -267,7 +217,7 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
         style={{ width: "100%", maxWidth: "640px" }}
       />
 
-      {mode === "register" && (
+      {mode === "register" && isVideoReady && (
         <div className="mt-4 flex justify-center">
           <button
             onClick={captureFrame}
