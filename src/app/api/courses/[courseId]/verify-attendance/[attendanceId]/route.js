@@ -1,3 +1,4 @@
+// app/api/courses/[courseId]/verify-attendance/[attendanceId]/route.js
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { getServerSession } from "next-auth";
@@ -12,7 +13,7 @@ export async function PATCH(request, { params }) {
     }
 
     const { courseId, attendanceId } = params;
-    const { status } = await request.json();
+    const { status, comment } = await request.json();
 
     if (!["approved", "rejected"].includes(status)) {
       return NextResponse.json(
@@ -36,71 +37,37 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    // Update attendance verification status
+    // Update attendance record
     const result = await db.collection("attendance").updateOne(
       {
         _id: new ObjectId(attendanceId),
         courseId: new ObjectId(courseId),
-        verificationStatus: "pending",
       },
       {
         $set: {
-          verificationStatus: status,
+          status: status === "approved" ? "present" : "absent",
           verifiedBy: session.user.email,
           verifiedAt: new Date(),
+          verificationComment: comment,
+          updatedAt: new Date(),
         },
       }
     );
 
     if (result.matchedCount === 0) {
       return NextResponse.json(
-        { message: "Attendance record not found or already verified" },
+        { message: "Attendance record not found" },
         { status: 404 }
       );
     }
 
-    // Get updated attendance record
-    const updatedAttendance = await db
-      .collection("attendance")
-      .aggregate([
-        {
-          $match: {
-            _id: new ObjectId(attendanceId),
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "studentEmail",
-            foreignField: "email",
-            as: "studentDetails",
-          },
-        },
-        {
-          $unwind: "$studentDetails",
-        },
-        {
-          $project: {
-            _id: 1,
-            timestamp: 1,
-            studentEmail: 1,
-            studentName: "$studentDetails.name",
-            verificationStatus: 1,
-            verifiedBy: 1,
-            verifiedAt: 1,
-          },
-        },
-      ])
-      .next();
-
     return NextResponse.json({
       message: `Attendance ${status} successfully`,
-      attendance: updatedAttendance,
     });
   } catch (error) {
-    console.error("Error updating verification status:", error);
+    console.error("Error verifying attendance:", error);
     return NextResponse.json(
-      { message: "Error updating verification status" },
+      { message: "Error verifying attendance" },
       { status: 500 }
     );
   }
