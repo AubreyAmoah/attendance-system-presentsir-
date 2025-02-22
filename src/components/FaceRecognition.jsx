@@ -1,205 +1,164 @@
+// components/FaceRecognition.jsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as blazeface from "@tensorflow-models/blazeface";
 
-const DEBUG = true;
-
-function debugLog(message, data = null) {
-  if (DEBUG) {
-    const timestamp = new Date().toISOString().split("T")[1];
-    console.log(`[${timestamp}] ${message}`, data || "");
-  }
-}
-
 export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const [initState, setInitState] = useState({
-    videoMounted: false,
-    cameraRequested: false,
-    cameraStarted: false,
-    modelLoaded: false,
-    tensorflowReady: false,
-  });
-  const [loading, setLoading] = useState(true);
+  const modelRef = useRef(null);
+  const [status, setStatus] = useState("Initializing...");
   const [error, setError] = useState(null);
+  const [faceDetected, setFaceDetected] = useState(false);
 
-  const analyzeBrowserSupport = () => {
-    const support = {
-      mediaDevices: !!navigator.mediaDevices,
-      getUserMedia: !!navigator.mediaDevices?.getUserMedia,
-      enumerateDevices: !!navigator.mediaDevices?.enumerateDevices,
-      secure:
-        window.location.protocol === "https:" ||
-        window.location.hostname === "localhost",
-      video: typeof HTMLVideoElement !== "undefined",
-      canvas: typeof HTMLCanvasElement !== "undefined",
-    };
-    debugLog("Browser support analysis:", support);
-    return support;
-  };
-
-  const checkCameraDevices = async () => {
+  const initCamera = async () => {
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(
-        (device) => device.kind === "videoinput"
-      );
-      debugLog("Available video devices:", videoDevices);
-      return videoDevices.length > 0;
-    } catch (err) {
-      debugLog("Error checking camera devices:", err);
-      return false;
-    }
-  };
+      setStatus("Requesting camera access...");
+      console.log("Starting camera initialization");
 
-  const startCamera = async () => {
-    debugLog("Starting camera initialization");
-    if (!videoRef.current) {
-      throw new Error("Video element not mounted");
-    }
-
-    setInitState((prev) => ({ ...prev, cameraRequested: true }));
-
-    try {
-      // First check if we can access any video devices
-      const hasCamera = await checkCameraDevices();
-      if (!hasCamera) {
-        throw new Error("No camera devices found");
-      }
-
-      debugLog("Requesting camera stream");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "user",
           width: { ideal: 640 },
           height: { ideal: 480 },
+          facingMode: "user",
         },
-        audio: false,
       });
 
-      debugLog(
-        "Camera stream obtained:",
-        stream.getVideoTracks()[0].getSettings()
-      );
+      console.log("Camera stream obtained");
+      streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-
-        debugLog("Stream attached to video element");
-
-        await new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error("Video loading timed out"));
-          }, 10000);
-
-          videoRef.current.onloadeddata = () => {
-            debugLog("Video data loaded");
-            clearTimeout(timeoutId);
-            resolve();
-          };
-
-          videoRef.current.onerror = (error) => {
-            debugLog("Video element error:", error);
-            clearTimeout(timeoutId);
-            reject(error);
+        await new Promise((resolve) => {
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().then(resolve);
           };
         });
-
-        setInitState((prev) => ({ ...prev, cameraStarted: true }));
-        debugLog("Camera initialization complete");
+        console.log("Video element initialized");
+        setStatus("Camera ready");
       }
     } catch (err) {
-      debugLog("Camera initialization error:", err);
-      throw err;
+      console.error("Camera init error:", err);
+      setError("Camera access failed: " + err.message);
     }
   };
 
-  const initializeSystem = async () => {
+  const initFaceDetection = async () => {
     try {
-      debugLog("Starting system initialization");
+      setStatus("Loading face detection...");
+      console.log("Initializing TensorFlow");
 
-      // Check browser support
-      const support = analyzeBrowserSupport();
-      if (!support.mediaDevices || !support.getUserMedia) {
-        throw new Error("Camera access not supported in this browser");
-      }
-
-      setLoading(true);
-      debugLog("Initializing TensorFlow.js");
       await tf.ready();
-      setInitState((prev) => ({ ...prev, tensorflowReady: true }));
-      debugLog("TensorFlow.js initialized");
-
-      debugLog("Loading face detection model");
       const model = await blazeface.load();
-      setInitState((prev) => ({ ...prev, modelLoaded: true }));
-      debugLog("Face detection model loaded");
+      modelRef.current = model;
 
-      debugLog("Starting camera");
-      await startCamera();
+      console.log("Face detection model loaded");
+      setStatus("Face detection ready");
 
-      setLoading(false);
-      debugLog("System initialization complete");
+      startFaceDetection();
     } catch (err) {
-      debugLog("System initialization error:", err);
-      setError(`Initialization failed: ${err.message}`);
-      setLoading(false);
+      console.error("Face detection init error:", err);
+      setError("Face detection initialization failed: " + err.message);
     }
   };
 
-  // Handle video mounting
-  useEffect(() => {
-    if (videoRef.current) {
-      debugLog("Video element mounted");
-      setInitState((prev) => ({ ...prev, videoMounted: true }));
-    }
-  }, []);
+  const startFaceDetection = () => {
+    if (!modelRef.current || !videoRef.current) return;
 
-  // Initialize system
-  useEffect(() => {
-    if (!initState.videoMounted) {
-      debugLog("Waiting for video element to mount");
-      return;
-    }
+    const detectFaces = async () => {
+      if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+        try {
+          const predictions = await modelRef.current.estimateFaces(
+            videoRef.current,
+            false
+          );
 
-    debugLog("Starting initialization process");
-    initializeSystem();
+          setFaceDetected(predictions.length > 0);
+          setStatus(
+            predictions.length > 0 ? "Face detected" : "No face detected"
+          );
 
-    return () => {
-      debugLog("Cleaning up resources");
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => {
-          debugLog("Stopping track:", track.label);
-          track.stop();
-        });
+          if (predictions.length > 0 && mode === "verify") {
+            await captureFrame(predictions[0]);
+          }
+        } catch (err) {
+          console.error("Detection error:", err);
+        }
       }
     };
-  }, [initState.videoMounted]);
 
-  // Debug display
-  const renderDebugInfo = () => (
-    <details className="mt-2 text-xs">
-      <summary className="cursor-pointer text-gray-600">Debug Info</summary>
-      <pre className="mt-1 p-2 bg-gray-100 rounded">
-        {JSON.stringify(initState, null, 2)}
-      </pre>
-    </details>
-  );
+    const interval = setInterval(detectFaces, 100);
+    return () => clearInterval(interval);
+  };
+
+  const captureFrame = async (facePrediction) => {
+    if (!videoRef.current || !facePrediction) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(videoRef.current, 0, 0);
+
+      const { topLeft, bottomRight } = facePrediction;
+      const padding = 50;
+      const width = bottomRight[0] - topLeft[0] + padding * 2;
+      const height = bottomRight[1] - topLeft[1] + padding * 2;
+
+      const faceCanvas = document.createElement("canvas");
+      faceCanvas.width = width;
+      faceCanvas.height = height;
+
+      const faceCtx = faceCanvas.getContext("2d");
+      faceCtx.drawImage(
+        canvas,
+        Math.max(0, topLeft[0] - padding),
+        Math.max(0, topLeft[1] - padding),
+        width,
+        height,
+        0,
+        0,
+        width,
+        height
+      );
+
+      const faceImage = faceCanvas.toDataURL("image/jpeg", 0.9);
+      onFaceDetected(faceImage);
+    } catch (err) {
+      console.error("Capture error:", err);
+      setError("Failed to capture image: " + err.message);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      console.log("Starting initialization");
+      await initCamera();
+      await initFaceDetection();
+    };
+
+    init();
+
+    return () => {
+      console.log("Cleaning up");
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   if (error) {
     return (
       <div className="p-4 bg-red-50 rounded-lg">
         <p className="text-red-600">{error}</p>
-        {renderDebugInfo()}
         <button
           onClick={() => {
             setError(null);
-            setLoading(true);
-            initializeSystem();
+            initCamera();
           }}
           className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
         >
@@ -209,60 +168,18 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="p-4">
-        <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-          <span className="ml-2">Starting camera...</span>
-        </div>
-        {renderDebugInfo()}
-        <div className="mt-2 text-sm">
-          <h3 className="font-medium">Initialization Status:</h3>
-          <ul className="mt-1 space-y-1">
-            <li
-              className={
-                initState.videoMounted ? "text-green-600" : "text-gray-500"
-              }
-            >
-              ✓ Video Element Mounted
-            </li>
-            <li
-              className={
-                initState.tensorflowReady ? "text-green-600" : "text-gray-500"
-              }
-            >
-              ✓ TensorFlow Initialized
-            </li>
-            <li
-              className={
-                initState.modelLoaded ? "text-green-600" : "text-gray-500"
-              }
-            >
-              ✓ Face Detection Model Loaded
-            </li>
-            <li
-              className={
-                initState.cameraRequested ? "text-green-600" : "text-gray-500"
-              }
-            >
-              ✓ Camera Access Requested
-            </li>
-            <li
-              className={
-                initState.cameraStarted ? "text-green-600" : "text-gray-500"
-              }
-            >
-              ✓ Camera Stream Started
-            </li>
-          </ul>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      <div
+        className={`p-4 rounded ${
+          faceDetected ? "bg-green-50" : "bg-yellow-50"
+        }`}
+      >
+        <p className={`${faceDetected ? "text-green-800" : "text-yellow-800"}`}>
+          {status}
+        </p>
+      </div>
+
       <div className="relative bg-black rounded-lg overflow-hidden">
         <video
           ref={videoRef}
@@ -272,15 +189,36 @@ export default function FaceRecognition({ onFaceDetected, mode = "register" }) {
           className="w-full max-w-2xl mx-auto"
           style={{ transform: "scaleX(-1)" }}
         />
+
+        {faceDetected && (
+          <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm">
+            Face Detected
+          </div>
+        )}
       </div>
 
       {mode === "register" && (
         <div className="flex justify-center">
           <button
-            onClick={captureFrame}
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            onClick={() => {
+              if (faceDetected && modelRef.current) {
+                modelRef.current
+                  .estimateFaces(videoRef.current, false)
+                  .then((predictions) => {
+                    if (predictions.length > 0) {
+                      captureFrame(predictions[0]);
+                    }
+                  });
+              }
+            }}
+            disabled={!faceDetected}
+            className={`px-6 py-2 rounded-lg ${
+              faceDetected
+                ? "bg-blue-500 hover:bg-blue-600 text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
           >
-            Capture Face
+            Capture
           </button>
         </div>
       )}
