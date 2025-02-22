@@ -14,6 +14,10 @@ export default function FaceRegistration() {
   const streamRef = useRef(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
 
+  useEffect(() => {
+    initializeModel();
+  }, []);
+
   // Initialize face detection model
   const initializeModel = async () => {
     try {
@@ -41,6 +45,7 @@ export default function FaceRegistration() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
         streamRef.current = stream;
         setIsCameraActive(true);
       }
