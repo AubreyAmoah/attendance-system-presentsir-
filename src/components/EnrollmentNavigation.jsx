@@ -40,7 +40,7 @@ export default function EnrollmentNavigation() {
 
                 <Link
                   href="/profile/face-registration"
-                  className="text-blue-600 hover:text-blue-800"
+                  className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-blue-600 hover:text-blue-800"
                 >
                   Manage Face Registration
                 </Link></>
