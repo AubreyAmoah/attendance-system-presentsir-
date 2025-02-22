@@ -12,7 +12,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { courseId } = params;
+    const { courseId } = await params;
     const { db } = await connectToDatabase();
 
     // Verify the lecturer owns the course
@@ -58,7 +58,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { courseId } = params;
+    const { courseId } = await params;
     const { email } = await request.json();
     const { db } = await connectToDatabase();
 

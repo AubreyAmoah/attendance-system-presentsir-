@@ -22,6 +22,7 @@ export default function DashboardPage() {
       const response = await fetch("/api/courses");
       if (response.ok) {
         const data = await response.json();
+        console.log(data);
         setCourses(data);
       }
     } catch (error) {

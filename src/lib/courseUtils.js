@@ -5,7 +5,9 @@ export function isCourseLive(course) {
   }
 
   const now = new Date();
-  const currentDay = now.toLocaleDateString("en-US", { weekday: "lowercase" });
+  const currentDay = now
+    .toLocaleDateString("en-US", { weekday: "long" })
+    .toLowerCase();
 
   // Check if course runs on current day
   if (!course.daysOfWeek.includes(currentDay)) {
