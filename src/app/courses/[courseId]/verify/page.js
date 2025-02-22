@@ -5,36 +5,41 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-export default function VerificationDashboardPage() {
+export default function VerifyAttendancePage() {
   const { data: session } = useSession();
   const params = useParams();
   const [pendingVerifications, setPendingVerifications] = useState([]);
   const [selectedVerification, setSelectedVerification] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentDate, setCurrentDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   useEffect(() => {
     if (session?.user?.role === "lecturer") {
       fetchPendingVerifications();
     }
-  }, [params.courseId, session]);
+  }, [params.courseId, currentDate, session]);
 
   const fetchPendingVerifications = async () => {
     try {
       const response = await fetch(
-        `/api/courses/${params.courseId}/pending-verifications`
+        `/api/courses/${params.courseId}/pending-verifications?date=${currentDate}`
       );
+
       if (!response.ok) throw new Error("Failed to fetch verifications");
+
       const data = await response.json();
       setPendingVerifications(data);
+      setLoading(false);
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
 
-  const handleVerification = async (attendanceId, status) => {
+  const handleVerification = async (attendanceId, status, comment = "") => {
     try {
       const response = await fetch(
         `/api/courses/${params.courseId}/verify-attendance/${attendanceId}`,
@@ -43,124 +48,111 @@ export default function VerificationDashboardPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({ status, comment }),
         }
       );
 
       if (!response.ok) throw new Error("Failed to update verification");
 
-      // Refresh the pending verifications list
-      fetchPendingVerifications();
+      await fetchPendingVerifications();
       setSelectedVerification(null);
     } catch (err) {
       setError(err.message);
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (session?.user?.role !== "lecturer") return <div>Access denied</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+        Error: {error}
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-6">
+    <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          Attendance Verification Dashboard
-        </h1>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Pending Verifications List */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              Pending Verifications
-            </h2>
-
-            {pendingVerifications.length === 0 ? (
-              <p className="text-gray-500">No pending verifications</p>
-            ) : (
-              <div className="space-y-4">
-                {pendingVerifications.map((verification) => (
-                  <div
-                    key={verification._id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedVerification(verification)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">
-                          {verification.studentName}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(verification.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        Pending
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-800">
+                Attendance Verification
+              </h2>
+              <input
+                type="date"
+                value={currentDate}
+                onChange={(e) => setCurrentDate(e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+            </div>
           </div>
 
-          {/* Verification Details */}
-          {selectedVerification && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">
-                Verification Details
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium">Student Information</h3>
-                  <p className="text-gray-600">
-                    {selectedVerification.studentName}
-                  </p>
-                  <p className="text-gray-500">
-                    {selectedVerification.studentEmail}
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium">Timestamp</h3>
-                  <p className="text-gray-600">
-                    {new Date(selectedVerification.timestamp).toLocaleString()}
-                  </p>
-                </div>
-
-                {selectedVerification.location && (
-                  <div>
-                    <h3 className="text-lg font-medium">Location</h3>
-                    <p className="text-gray-600">
-                      Latitude: {selectedVerification.location.latitude}
-                      <br />
-                      Longitude: {selectedVerification.location.longitude}
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-6 flex space-x-4">
-                  <button
-                    onClick={() =>
-                      handleVerification(selectedVerification._id, "approved")
-                    }
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleVerification(selectedVerification._id, "rejected")
-                    }
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                  >
-                    Reject
-                  </button>
-                </div>
+          <div className="divide-y divide-gray-200">
+            {pendingVerifications.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                No pending verifications for this date
               </div>
-            </div>
-          )}
+            ) : (
+              pendingVerifications.map((verification) => (
+                <div key={verification._id} className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {verification.studentName}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {verification.studentEmail}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Marked at:{" "}
+                        {new Date(verification.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() =>
+                          handleVerification(verification._id, "approved")
+                        }
+                        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleVerification(verification._id, "rejected")
+                        }
+                        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Face Image Preview */}
+                  {verification.faceData && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Face Capture:
+                      </p>
+                      <img
+                        src={verification.faceData}
+                        alt="Face Capture"
+                        className="h-32 w-32 object-cover rounded-lg"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

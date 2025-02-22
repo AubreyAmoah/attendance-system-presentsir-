@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/auth.config";
-
+import { authOptions } from "@/app/api/auth/auth.config";
 
 export async function POST(request) {
   try {
@@ -11,51 +10,49 @@ export async function POST(request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, code, schedule } = await request.json();
+    const courseData = await request.json();
     const { db } = await connectToDatabase();
 
+    // Validate time format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (
+      !timeRegex.test(courseData.startTime) ||
+      !timeRegex.test(courseData.endTime)
+    ) {
+      return NextResponse.json(
+        { message: "Invalid time format" },
+        { status: 400 }
+      );
+    }
+
+    // Validate days of week
+    const validDays = [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+    ];
+    if (!courseData.daysOfWeek.every((day) => validDays.includes(day))) {
+      return NextResponse.json(
+        { message: "Invalid days of week" },
+        { status: 400 }
+      );
+    }
+
     const course = await db.collection("courses").insertOne({
-      name,
-      code,
-      schedule,
+      ...courseData,
       lecturerId: session.user.email,
-      createdAt: new Date(),
       students: [],
+      createdAt: new Date(),
     });
 
     return NextResponse.json(course, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { message: "Error creating course" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const { db } = await connectToDatabase();
-
-    const courses =
-      session.user.role === "lecturer"
-        ? await db
-            .collection("courses")
-            .find({ lecturerId: session.user.email })
-            .toArray()
-        : await db
-            .collection("courses")
-            .find({ students: session.user.email })
-            .toArray();
-
-    return NextResponse.json(courses);
-  } catch (error) {
-    return NextResponse.json(
-      { message: "Error fetching courses" },
       { status: 500 }
     );
   }

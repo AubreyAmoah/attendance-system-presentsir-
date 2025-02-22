@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/auth.config";
 import { ObjectId } from "mongodb";
+import { isCourseLive } from "@/lib/courseUtils";
 
 export async function POST(request, { params }) {
   try {
@@ -26,6 +27,16 @@ export async function POST(request, { params }) {
     if (!course) {
       return NextResponse.json(
         { message: "Not enrolled in this course" },
+        { status: 403 }
+      );
+    }
+
+    // Check if course is live
+    if (!isCourseLive(course)) {
+      return NextResponse.json(
+        {
+          message: "Attendance can only be marked during scheduled class time",
+        },
         { status: 403 }
       );
     }

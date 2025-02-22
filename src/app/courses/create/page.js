@@ -1,3 +1,4 @@
+// app/courses/create/page.js
 "use client";
 
 import { useState } from "react";
@@ -10,8 +11,30 @@ export default function CreateCoursePage() {
   const [courseData, setCourseData] = useState({
     name: "",
     code: "",
-    schedule: "",
+    startTime: "",
+    endTime: "",
+    daysOfWeek: [], // ['monday', 'tuesday', etc.]
   });
+
+  const daysOfWeek = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  const handleDayToggle = (day) => {
+    const lowercaseDay = day.toLowerCase();
+    setCourseData((prev) => ({
+      ...prev,
+      daysOfWeek: prev.daysOfWeek.includes(lowercaseDay)
+        ? prev.daysOfWeek.filter((d) => d !== lowercaseDay)
+        : [...prev.daysOfWeek, lowercaseDay],
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,21 +47,15 @@ export default function CreateCoursePage() {
         body: JSON.stringify(courseData),
       });
 
-      if (response.ok) {
-        router.push("/dashboard");
-      }
+      if (!response.ok) throw new Error("Failed to create course");
+      router.push("/dashboard");
     } catch (error) {
       console.error("Error creating course:", error);
     }
   };
 
-  if (session?.user?.role !== "lecturer") {
-    router.push("/dashboard");
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-gray-100 py-6">
+    <div className="min-h-screen bg-gray-50 py-6">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Create New Course
@@ -50,21 +67,14 @@ export default function CreateCoursePage() {
         >
           <div className="space-y-6">
             <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
-              >
+              <label className="block text-sm font-medium text-gray-700">
                 Course Name
               </label>
               <input
                 type="text"
-                id="name"
                 value={courseData.name}
                 onChange={(e) =>
-                  setCourseData({
-                    ...courseData,
-                    name: e.target.value,
-                  })
+                  setCourseData({ ...courseData, name: e.target.value })
                 }
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
@@ -72,21 +82,14 @@ export default function CreateCoursePage() {
             </div>
 
             <div>
-              <label
-                htmlFor="code"
-                className="block text-sm font-medium text-gray-700"
-              >
+              <label className="block text-sm font-medium text-gray-700">
                 Course Code
               </label>
               <input
                 type="text"
-                id="code"
                 value={courseData.code}
                 onChange={(e) =>
-                  setCourseData({
-                    ...courseData,
-                    code: e.target.value,
-                  })
+                  setCourseData({ ...courseData, code: e.target.value })
                 }
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
@@ -94,25 +97,53 @@ export default function CreateCoursePage() {
             </div>
 
             <div>
-              <label
-                htmlFor="schedule"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Schedule
+              <label className="block text-sm font-medium text-gray-700">
+                Class Days
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {daysOfWeek.map((day) => (
+                  <label key={day} className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={courseData.daysOfWeek.includes(
+                        day.toLowerCase()
+                      )}
+                      onChange={() => handleDayToggle(day)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2">{day}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Start Time
               </label>
               <input
-                type="text"
-                id="schedule"
-                value={courseData.schedule}
+                type="time"
+                value={courseData.startTime}
                 onChange={(e) =>
-                  setCourseData({
-                    ...courseData,
-                    schedule: e.target.value,
-                  })
+                  setCourseData({ ...courseData, startTime: e.target.value })
                 }
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
-                placeholder="e.g., Monday 10:00 AM - 12:00 PM"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={courseData.endTime}
+                onChange={(e) =>
+                  setCourseData({ ...courseData, endTime: e.target.value })
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
               />
             </div>
 
