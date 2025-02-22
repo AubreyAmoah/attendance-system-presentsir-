@@ -8,68 +8,85 @@ import * as blazeface from '@tensorflow-models/blazeface';
 export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const [isVideoMounted, setIsVideoMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingState, setLoadingState] = useState('Initializing...');
   const [error, setError] = useState(null);
 
+  // Handle video mounting
+  useEffect(() => {
+    if (videoRef.current) {
+      setIsVideoMounted(true);
+    }
+  }, []);
+
   const startCamera = async () => {
+    if (!videoRef.current) return;
+    
     try {
-      setLoadingState('Requesting camera access...');
-      
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' }, // Simplified constraints
+        video: { facingMode: 'user' },
         audio: false
       });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-      }
-
-      // Simple video ready check
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
+      
       return new Promise((resolve) => {
         videoRef.current.onloadeddata = () => {
           resolve();
         };
       });
     } catch (err) {
+      console.error('Camera error:', err);
       throw new Error(`Camera access failed: ${err.message}`);
     }
   };
 
-  const initializeSystem = async () => {
-    try {
-      // Start camera first
-      setLoadingState('Starting camera...');
-      await startCamera();
-
-      // Load TF.js and model in parallel with camera setup
-      setLoadingState('Loading face detection...');
-      await tf.ready();
-      const model = await blazeface.load();
-
-      setLoading(false);
-      return model;
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
-      return null;
-    }
-  };
-
+  // Initialize only after video is mounted
   useEffect(() => {
-    initializeSystem();
+    let mounted = true;
+
+    const init = async () => {
+      if (!isVideoMounted) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Start camera
+        await startCamera();
+        
+        // Load face detection model
+        await tf.ready();
+        await blazeface.load();
+
+        if (mounted) {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Initialization error:', err);
+        if (mounted) {
+          setError(err.message);
+          setLoading(false);
+        }
+      }
+    };
+
+    init();
 
     return () => {
+      mounted = false;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [isVideoMounted]);
 
   const captureFrame = async () => {
+    if (!videoRef.current) return;
+
     try {
-      const model = await blazeface.load(); // Load model on demand
+      const model = await blazeface.load();
       const predictions = await model.estimateFaces(videoRef.current, false);
 
       if (!predictions.length) {
@@ -87,7 +104,6 @@ export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
       const { topLeft, bottomRight } = face;
       const padding = 50;
 
-      // Capture face region
       const faceCanvas = document.createElement('canvas');
       const width = bottomRight[0] - topLeft[0] + padding * 2;
       const height = bottomRight[1] - topLeft[1] + padding * 2;
@@ -97,8 +113,8 @@ export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
       const faceCtx = faceCanvas.getContext('2d');
       faceCtx.drawImage(
         canvas,
-        topLeft[0] - padding,
-        topLeft[1] - padding,
+        Math.max(0, topLeft[0] - padding),
+        Math.max(0, topLeft[1] - padding),
         width,
         height,
         0,
@@ -109,6 +125,7 @@ export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
 
       onFaceDetected(faceCanvas.toDataURL('image/jpeg'));
     } catch (err) {
+      console.error('Capture error:', err);
       setError(err.message);
     }
   };
@@ -121,7 +138,7 @@ export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
           onClick={() => {
             setError(null);
             setLoading(true);
-            initializeSystem();
+            startCamera();
           }}
           className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
         >
@@ -133,9 +150,9 @@ export default function FaceRecognition({ onFaceDetected, mode = 'register' }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-4 space-y-3">
+      <div className="flex items-center justify-center p-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-        <p className="text-sm text-gray-600">{loadingState}</p>
+        <span className="ml-2">Starting camera...</span>
       </div>
     );
   }
