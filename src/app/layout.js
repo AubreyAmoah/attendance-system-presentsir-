@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import EnrollmentNavigation from "@/components/EnrollmentNavigation";
 import Providers from "@/components/Providers";
+import NotificationBell from "@/components/NotificationBell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,6 +28,10 @@ export default function RootLayout({ children }) {
         {" "}
         <Providers>
           <EnrollmentNavigation />
+          <div className="flex items-center space-x-4">
+            <NotificationBell />
+          </div>
+
           {children}
         </Providers>
       </body>

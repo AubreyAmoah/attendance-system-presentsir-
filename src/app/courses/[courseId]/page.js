@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { isCourseLive } from "@/lib/courseUtils";
+import Link from "next/link";
 
 export default function CourseDetailsPage() {
   const { data: session } = useSession();
@@ -130,6 +131,24 @@ export default function CourseDetailsPage() {
                       {course.startTime} - {course.endTime}
                     </p>
                   </div>
+                  <div className="mt-4">
+                    <Link
+                      href={`/courses/${params.courseId}/schedule/view`}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      View Schedule Calendar
+                    </Link>
+                  </div>
+                  {session?.user?.role === "lecturer" && (
+                    <button
+                      onClick={() =>
+                        router.push(`/courses/${params.courseId}/schedule`)
+                      }
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      Manage Schedule
+                    </button>
+                  )}
                 </div>
               </div>
 
