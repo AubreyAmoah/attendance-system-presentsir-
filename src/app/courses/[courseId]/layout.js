@@ -1,3 +1,4 @@
+import CourseNavigation from "@/components/CourseNavigation";
 import EnrollmentNavigation from "@/components/EnrollmentNavigation";
 
 export default function CourseLayout({ children }) {

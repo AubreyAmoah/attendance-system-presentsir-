@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 export default function EnrollmentNavigation() {
   const { data: session } = useSession();
+
+  const handleLogout = async () => {
+    await signOut({
+      callbackUrl: "/login",
+      redirect: true,
+    });
+  };
 
   if (!session) return null;
 
@@ -39,6 +46,21 @@ export default function EnrollmentNavigation() {
                 </Link>
               )}
             </div>
+            {session && (
+              <div className="flex items-center">
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-700">
+                    {session.user.name}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
