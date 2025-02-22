@@ -3,6 +3,47 @@ import { connectToDatabase } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/auth.config";
 
+export async function GET(request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const { db } = await connectToDatabase();
+
+    let courses;
+
+    if (session.user.role === "lecturer") {
+      // Get courses where user is lecturer
+      courses = await db
+        .collection("courses")
+        .find({ lecturerId: session.user.email })
+        .toArray();
+    } else {
+      // Get courses where user is enrolled as student
+      courses = await db
+        .collection("courses")
+        .find({ students: session.user.email })
+        .toArray();
+    }
+
+    // Add live status to each course
+    const coursesWithStatus = courses.map((course) => ({
+      ...course,
+      isLive: isCourseLive(course),
+    }));
+
+    return NextResponse.json(coursesWithStatus);
+  } catch (error) {
+    console.error("Error fetching courses:", error);
+    return NextResponse.json(
+      { message: "Error fetching courses" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
