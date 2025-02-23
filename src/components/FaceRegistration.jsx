@@ -235,10 +235,8 @@ export default function FaceRegistration() {
           <button
             onClick={isCameraActive ? stopCamera : startCamera}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            disabled={loading}
           >
-            {isCameraActive ? "Stop Camera" : "Start Camera"}{" "}
-            {/* Changed label for clarity */}
+            {isCameraActive ? "Stop Camera" : "Take Selfie"}
           </button>
 
           {isCameraActive && (
@@ -247,27 +245,17 @@ export default function FaceRegistration() {
                 ref={videoRef}
                 autoPlay
                 playsInline
-                style={{ width: "640px", height: "480px" }}
-                className="w-full max-w-md mx-auto border border-gray-300"
+                className="w-full max-w-md mx-auto"
               />
               <button
                 onClick={takeSelfie}
-                disabled={!isCameraActive || loading}
-                className="mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+                className="mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
               >
-                Take Photo
+                Capture
               </button>
             </div>
           )}
         </div>
-
-        {/* Debug info */}
-        {loading && <div>Loading camera...</div>}
-        {error && (
-          <div className="mt-4 p-4 bg-red-50 text-red-600 rounded">
-            Camera error: {error}
-          </div>
-        )}
 
         {/* Preview Section */}
         {images.length > 0 && (
