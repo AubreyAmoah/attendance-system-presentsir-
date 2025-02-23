@@ -115,3 +115,61 @@ export async function POST(request) {
     );
   }
 }
+
+export async function GET() {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const { db } = await connectToDatabase();
+
+    // Fetch user's face registration data
+    const user = await db.collection("users").findOne(
+      { email: session.user.email },
+      {
+        projection: {
+          faceImages: 1,
+          faceRegistrationComplete: 1,
+          updatedAt: 1,
+        },
+      }
+    );
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // If no face registration data exists
+    if (!user.faceImages || user.faceImages.length === 0) {
+      return NextResponse.json({
+        message: "No face registration data found",
+        isRegistered: false,
+        data: null,
+      });
+    }
+
+    // Return face registration data
+    return NextResponse.json({
+      message: "Face registration data retrieved successfully",
+      isRegistered: user.faceRegistrationComplete || false,
+      data: {
+        images: user.faceImages.map((img) => ({
+          timestamp: img.timestamp,
+          metadata: img.metadata,
+          registeredAt: img.registeredAt,
+        })),
+        updatedAt: user.updatedAt,
+        totalImages: user.faceImages.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching face registration data:", error);
+    return NextResponse.json(
+      { message: "Error retrieving face registration data" },
+      { status: 500 }
+    );
+  }
+}

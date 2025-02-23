@@ -244,7 +244,6 @@ export default function FaceRegistration() {
             <video
               ref={videoRef}
               autoPlay
-              playsInline
               className="w-full max-w-md mx-auto"
             />
             {isCameraActive && (
