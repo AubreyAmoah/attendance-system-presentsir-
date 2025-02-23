@@ -48,6 +48,7 @@ export default function FaceRegistration() {
         await videoRef.current.play();
         streamRef.current = stream;
         setIsCameraActive(true);
+        console.log("started camera");
       }
     } catch (err) {
       setError("Error accessing camera");
@@ -239,22 +240,22 @@ export default function FaceRegistration() {
             {isCameraActive ? "Stop Camera" : "Take Selfie"}
           </button>
 
-          {isCameraActive && (
-            <div className="mt-4">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full max-w-md mx-auto"
-              />
+          <div className="mt-4">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full max-w-md mx-auto"
+            />
+            {isCameraActive && (
               <button
                 onClick={takeSelfie}
                 className="mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
               >
                 Capture
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Preview Section */}
