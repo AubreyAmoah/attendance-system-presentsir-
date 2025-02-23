@@ -169,6 +169,29 @@ export default function FaceRegistration() {
           }
 
           const face = faces[0];
+          const { topLeft, bottomRight } = face;
+          const padding = 50;
+
+          // Crop face region (same as in takeSelfie)
+          const width = bottomRight[0] - topLeft[0] + padding * 2;
+          const height = bottomRight[1] - topLeft[1] + padding * 2;
+
+          const faceCanvas = document.createElement("canvas");
+          faceCanvas.width = width;
+          faceCanvas.height = height;
+          const faceCtx = faceCanvas.getContext("2d");
+
+          faceCtx.drawImage(
+            canvas,
+            topLeft[0] - padding,
+            topLeft[1] - padding,
+            width,
+            height,
+            0,
+            0,
+            width,
+            height
+          );
           resolve({
             image: canvas.toDataURL("image/jpeg", 0.9),
             timestamp: new Date().toISOString(),
